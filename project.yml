@@ -2,7 +2,7 @@ name: MediCheck
 options:
   bundleIdPrefix: com.medicheck
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "17.0"
   xcodeVersion: "15.3"
   generateEmptyDirectories: true
 

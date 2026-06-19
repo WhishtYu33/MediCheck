@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MediCheck (用药提醒) — iOS medication reminder app. SwiftUI + SwiftData + UserNotifications, MVVM architecture. Minimum iOS 16. Chinese/English localization.
+MediCheck (用药提醒) — iOS medication reminder app. SwiftUI + SwiftData + UserNotifications, MVVM architecture. Minimum iOS 17. Chinese/English localization.
 
 ## Build & Run
 

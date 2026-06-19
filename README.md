@@ -18,7 +18,7 @@
 - **SwiftData** — 原生数据持久化
 - **UserNotifications** — 本地通知
 - **MVVM** 架构
-- 最低支持 **iOS 16**
+- 最低支持 **iOS 17**
 
 ## 项目结构
 
@@ -62,7 +62,7 @@ open MediCheck.xcodeproj
 2. 打开 Xcode，选择 **File → New → Project**，选择 iOS → App
 3. 项目名称设为 `MediCheck`，Interface 选 **SwiftUI**，Language 选 **Swift**
 4. 将本目录下的所有 `.swift` 文件拖入 Xcode 项目中（按文件夹结构分组）
-5. 在 Target 的 **General** 中确保 Deployment Target 设为 **iOS 16.0**
+5. 在 Target 的 **General** 中确保 Deployment Target 设为 **iOS 17.0**
 6. 选择模拟器或真机，按 **Cmd+R** 运行
 
 ### 通知测试注意事项
