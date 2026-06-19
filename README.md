@@ -78,28 +78,24 @@ open MediCheck.xcodeproj
 - **视觉反馈**：完成状态绿色填充、过期提醒橙色脉冲
 - **零学习成本**：5 分钟内完成所有药品设置
 
-## CI / 自动构建 IPA
+## CI / 自动构建 IPA（无签名）
 
-本项目配置了 GitHub Actions，每次推送代码后自动在 **GitHub 免费 macOS 云 Runner** 上编译并输出 IPA。
+本项目配置了 GitHub Actions，每次推送代码后自动在 **GitHub 免费 macOS 云 Runner** 上编译并输出 **未签名的原始 IPA**。
 
-### 首次配置
+### 工作流程
 
-1. 推送代码到 GitHub 仓库
-2. 在仓库页面进入 **Settings → Secrets and variables → Actions → New repository secret**
-3. 添加以下 Secret（必填）：
+```
+推送代码 → GitHub Actions → macOS 云编译 → 未签名 IPA → 下载 → SideStore 重签名安装
+```
 
-| Secret 名称 | 说明 |
-|---|---|
-| `DEVELOPMENT_TEAM` | 你的 Apple Team ID，在 [developer.apple.com/account](https://developer.apple.com/account) 查看 |
-| `APPLE_ID` | （可选）Apple ID 邮箱，用于自动签名 |
-| `APPLE_ID_PASSWORD` | （可选）Apple ID 专用密码 |
-
-> 💡 即使没有付费开发者账号，免费 Apple ID 也可获得 Team ID，用于开发签名。
+- ✅ **不需要** Apple Developer 付费账号
+- ✅ **不需要** 配置任何 GitHub Secrets
+- ✅ 开箱即用，推送代码即自动构建
 
 ### 触发构建
 
 - **自动**：推送代码到 `main` 分支
-- **手动**：Actions 标签页 → **Build IPA** → **Run workflow**
+- **手动**：Actions 标签页 → **Build MediCheck (Unsigned IPA)** → **Run workflow**
 - **发布**：创建 GitHub Release 时自动构建并附加 IPA
 
 ### 📥 下载 IPA 到桌面
@@ -117,16 +113,24 @@ bash scripts/download-ipa.sh
 **方式二：手动下载**
 
 1. 打开 GitHub 仓库 → **Actions** 标签页
-2. 点击最近一次成功的 **Build IPA** 运行
-3. 在 **Artifacts** 区域下载 `MediCheck-*.ipa`
+2. 点击最近一次成功的构建运行
+3. 在 **Artifacts** 区域下载 `MediCheck_unsigned_*.ipa`
 
-### 项目生成
+### 🔐 安装到 iPhone（SideStore）
 
-CI 使用 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 从 `project.yml` 自动生成 `.xcodeproj`。本地也可用：
+1. 下载未签名 IPA
+2. 在 Windows 上用 [SideStore](https://sidestore.io/) 打开 IPA
+3. SideStore 会用你的 **免费 Apple ID** 自动重签名并安装到 iPhone
+4. 每 7 天需要在 SideStore 中刷新签名（或连接 SideStore 自动刷新）
+
+### 本地开发
+
+CI 使用 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 从 `project.yml` 自动生成 `.xcodeproj`：
 
 ```bash
 brew install xcodegen
 xcodegen generate
+open MediCheck.xcodeproj
 ```
 
 ## 许可证

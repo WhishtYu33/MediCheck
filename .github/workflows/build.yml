@@ -1,4 +1,4 @@
-name: Build IPA
+name: Build MediCheck (Unsigned IPA)
 
 on:
   push:
@@ -6,14 +6,12 @@ on:
   pull_request:
     branches: [main, master]
   workflow_dispatch:
-    # 允许手动触发构建
   release:
     types: [published]
-    # 发布 Release 时自动触发，IPA 会附加到 Release
 
 jobs:
   build:
-    name: Build MediCheck IPA
+    name: Build Unsigned IPA
     runs-on: macos-latest
 
     steps:
@@ -25,10 +23,9 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      - name: Show Xcode version
+      - name: Show build environment
         run: |
           xcodebuild -version
-          xcrun --show-sdk-path
           swift --version
 
       - name: Install XcodeGen
@@ -38,51 +35,14 @@ jobs:
         run: |
           xcodegen generate
           echo "✅ Xcode project generated"
-          ls -la MediCheck.xcodeproj/
 
       # ============================================
-      # 🔐 代码签名配置
-      # 你需要在 GitHub 仓库的 Settings → Secrets and variables → Actions
-      # 中添加以下 Secrets：
-      #
-      #   DEVELOPMENT_TEAM    — 你的 Apple Team ID（在 developer.apple.com 查看）
-      #   APPLE_ID            — 你的 Apple ID 邮箱（可选，用于自动签名）
-      #   APPLE_ID_PASSWORD   — Apple ID 专用密码（可选，用于自动签名）
-      #
-      # 如果只是个人免费账号，也可以在下方 DEVELOPMENT_TEAM 直接写死 Team ID。
+      # 🔓 无签名编译
+      # 输出未签名的原始 IPA，后续用 SideStore 重签名安装
+      # 不需要 Apple Developer 付费账号
       # ============================================
 
-      - name: Set DEVELOPMENT_TEAM
-        id: team
-        run: |
-          if [ -n "${{ secrets.DEVELOPMENT_TEAM }}" ]; then
-            echo "team=${{ secrets.DEVELOPMENT_TEAM }}" >> $GITHUB_OUTPUT
-            echo "🔑 Using DEVELOPMENT_TEAM from secrets"
-          else
-            # 如果没有设置 Secret，尝试从钥匙串自动获取
-            TEAM=$(security find-identity -v -p codesigning 2>/dev/null | head -1 | grep -oE '\([A-Z0-9]+\)' | tr -d '()' || echo "")
-            if [ -n "$TEAM" ]; then
-              echo "team=$TEAM" >> $GITHUB_OUTPUT
-              echo "🔑 Found Team ID from keychain: $TEAM"
-            else
-              echo "team=" >> $GITHUB_OUTPUT
-              echo "⚠️  WARNING: No DEVELOPMENT_TEAM found. Build may fail."
-              echo "⚠️  Go to: Settings → Secrets and variables → Actions → New repository secret"
-              echo "⚠️  Add: DEVELOPMENT_TEAM = your Apple Team ID"
-            fi
-          fi
-
-      - name: Setup code signing (if Apple ID provided)
-        if: env.APPLE_ID != ''
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-        run: |
-          echo "🔐 Setting up automatic code signing..."
-          # 如果提供了 Apple ID，解锁钥匙串用于自动签名
-          security unlock-keychain -p "" login.keychain 2>/dev/null || true
-
-      - name: Build and Archive
+      - name: Build and Archive (unsigned)
         run: |
           xcodebuild archive \
             -project MediCheck.xcodeproj \
@@ -91,99 +51,71 @@ jobs:
             -configuration Release \
             -destination "generic/platform=iOS" \
             -archivePath "${{ github.workspace }}/build/MediCheck.xcarchive" \
-            DEVELOPMENT_TEAM="${{ steps.team.outputs.team }}" \
-            CODE_SIGN_STYLE=Automatic \
-            CODE_SIGN_IDENTITY="Apple Development" \
-            -allowProvisioningUpdates \
-            -verbose 2>&1 | tee xcodebuild_archive.log | xcbeautify || \
-            xcodebuild archive \
-              -project MediCheck.xcodeproj \
-              -scheme MediCheck \
-              -sdk iphoneos \
-              -configuration Release \
-              -destination "generic/platform=iOS" \
-              -archivePath "${{ github.workspace }}/build/MediCheck.xcarchive" \
-              DEVELOPMENT_TEAM="${{ steps.team.outputs.team }}" \
-              CODE_SIGN_STYLE=Automatic \
-              CODE_SIGN_IDENTITY="Apple Development" \
-              -allowProvisioningUpdates \
-              -verbose 2>&1 | tee xcodebuild_archive.log
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="" \
+            -verbose 2>&1 | tee xcodebuild_archive.log
         timeout-minutes: 30
 
-      - name: Export IPA
+      - name: Create unsigned IPA
         run: |
-          # 尝试使用 ExportOptions.plist
-          if [ -f "ExportOptions.plist" ]; then
-            xcodebuild -exportArchive \
-              -archivePath "${{ github.workspace }}/build/MediCheck.xcarchive" \
-              -exportPath "${{ github.workspace }}/build/export" \
-              -exportOptionsPlist ExportOptions.plist \
-              -allowProvisioningUpdates \
-              -verbose 2>&1 | tee xcodebuild_export.log
-          else
-            # 或者创建一个基本的 ExportOptions
-            mkdir -p "${{ github.workspace }}/build/export"
-            cat > /tmp/ExportOptions.plist << 'PLISTEOF'
-            <?xml version="1.0" encoding="UTF-8"?>
-            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-            <plist version="1.0">
-            <dict>
-              <key>method</key>
-              <string>development</string>
-              <key>compileBitcode</key>
-              <false/>
-            </dict>
-            </plist>
-            PLISTEOF
+          APP_PATH="${{ github.workspace }}/build/MediCheck.xcarchive/Products/Applications/MediCheck.app"
 
-            xcodebuild -exportArchive \
-              -archivePath "${{ github.workspace }}/build/MediCheck.xcarchive" \
-              -exportPath "${{ github.workspace }}/build/export" \
-              -exportOptionsPlist /tmp/ExportOptions.plist \
-              -allowProvisioningUpdates \
-              -verbose 2>&1 | tee xcodebuild_export.log
-          fi
-        timeout-minutes: 15
-
-      - name: Rename IPA with date
-        id: rename
-        run: |
-          IPA_PATH="${{ github.workspace }}/build/export/MediCheck.ipa"
-          if [ -f "$IPA_PATH" ]; then
-            BUILD_DATE=$(date +"%Y%m%d_%H%M%S")
-            COMMIT_SHORT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-            IPA_NAME="MediCheck_${BUILD_DATE}_${COMMIT_SHORT}.ipa"
-            cp "$IPA_PATH" "${{ github.workspace }}/build/export/${IPA_NAME}"
-            echo "ipa_name=${IPA_NAME}" >> $GITHUB_OUTPUT
-            echo "✅ IPA created: ${IPA_NAME}"
-            ls -lh "${{ github.workspace }}/build/export/${IPA_NAME}"
-          else
-            echo "❌ IPA not found! Check build logs."
-            echo "Contents of build directory:"
-            find "${{ github.workspace }}/build" -type f 2>/dev/null || echo "No files found"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "❌ .app not found at expected path!"
+            echo "Searching for .app in archive..."
+            find "${{ github.workspace }}/build/MediCheck.xcarchive" -name "*.app" -type d 2>/dev/null
             exit 1
           fi
+
+          echo "✅ Found: $APP_PATH"
+
+          # 验证签名状态（应显示未签名）
+          echo ""
+          echo "🔍 签名状态检查："
+          codesign -dv "$APP_PATH" 2>&1 || echo "   ✅ App 未签名（符合预期）"
+
+          # 手动打包 IPA（Payload 方式，SideStore 兼容）
+          mkdir -p "${{ github.workspace }}/build/Payload"
+          cp -R "$APP_PATH" "${{ github.workspace }}/build/Payload/"
+
+          cd "${{ github.workspace }}/build"
+          zip -r -y "MediCheck.ipa" Payload/
+
+          echo ""
+          echo "📦 IPA 已生成："
+          ls -lh "${{ github.workspace }}/build/MediCheck.ipa"
+        timeout-minutes: 5
+
+      - name: Rename IPA
+        id: rename
+        run: |
+          BUILD_DATE=$(date +"%Y%m%d_%H%M%S")
+          COMMIT_SHORT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          IPA_NAME="MediCheck_unsigned_${BUILD_DATE}_${COMMIT_SHORT}.ipa"
+          mv "${{ github.workspace }}/build/MediCheck.ipa" "${{ github.workspace }}/build/${IPA_NAME}"
+          echo "ipa_name=${IPA_NAME}" >> $GITHUB_OUTPUT
+          echo "✅ $IPA_NAME"
 
       - name: Upload IPA as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: MediCheck-${{ steps.rename.outputs.ipa_name }}
-          path: ${{ github.workspace }}/build/export/${{ steps.rename.outputs.ipa_name }}
+          path: ${{ github.workspace }}/build/${{ steps.rename.outputs.ipa_name }}
           retention-days: 90
 
       - name: Upload Build Logs (on failure)
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs
-          path: |
-            xcodebuild_archive.log
-            xcodebuild_export.log
+          name: build-logs-debug
+          path: xcodebuild_archive.log
           retention-days: 7
 
-      # 如果是由 Release 触发，自动把 IPA 附加到 Release
       - name: Upload IPA to Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ github.workspace }}/build/export/${{ steps.rename.outputs.ipa_name }}
+          files: ${{ github.workspace }}/build/${{ steps.rename.outputs.ipa_name }}
