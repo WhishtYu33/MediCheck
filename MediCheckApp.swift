@@ -8,6 +8,19 @@ struct MediCheckApp: App {
     let container: ModelContainer
 
     init() {
+        // Register UserDefaults defaults BEFORE any other code reads them.
+        // @AppStorage's inline default is not registered with the underlying
+        // UserDefaults, so UserDefaults.standard.bool(forKey:) returns false
+        // for a key that was never explicitly written — even though the UI
+        // shows the toggle as ON. This caused notifications to never be
+        // scheduled on fresh installs.
+        UserDefaults.standard.register(defaults: [
+            UserSettingsKeys.notificationsEnabled: UserSettingsDefaults.notificationsEnabled,
+            UserSettingsKeys.soundEnabled: UserSettingsDefaults.soundEnabled,
+            UserSettingsKeys.badgeEnabled: UserSettingsDefaults.badgeEnabled,
+            UserSettingsKeys.advanceReminderMinutes: UserSettingsDefaults.advanceReminderMinutes,
+        ])
+
         do {
             let schema = Schema([
                 Medication.self,
@@ -39,10 +52,12 @@ struct MediCheckApp: App {
                 .onAppear {
                     Task {
                         _ = await notificationManager.requestAuthorization()
+                        // Schedule after authorization completes so notifications
+                        // are active post-grant (especially on first launch).
+                        notificationManager.scheduleAllNotifications(
+                            medications: notificationManager.fetchAllMedications(context: container.mainContext)
+                        )
                     }
-                    notificationManager.scheduleAllNotifications(
-                        medications: notificationManager.fetchAllMedications(context: container.mainContext)
-                    )
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .markMedicationAsTaken)) { notification in
                     guard let medicationID = notification.userInfo?["medicationID"] as? UUID else {
