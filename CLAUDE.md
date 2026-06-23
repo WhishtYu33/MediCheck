@@ -73,3 +73,11 @@ Extensions/                → Color+Hex (parse hex strings), Date+Extensions (s
 - "Mark as Taken" action button on notification banner triggers in-app handling via NotificationCenter bridge
 - Badge count reflects pending notification count
 - Notifications respect global on/off toggle and per-medication `isActive` flag
+
+## 技能自动调用规则
+
+1. 首先识别用户需求场景，检索所有已注册 Skill 的 description，匹配度最高的技能必须自动调用
+2. 禁止无理由跳过技能，仅在完全不匹配任何 Skill 时纯文字回答
+3. 多技能匹配时自动串联调用，无需用户手动输入技能名
+4. 调用前输出思考：识别到需求匹配 XX 技能，自动加载执行
+5. 若多次未正确触发，优先重读所有 Skill 描述重新匹配
