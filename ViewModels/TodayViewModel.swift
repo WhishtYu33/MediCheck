@@ -65,11 +65,12 @@ final class TodayViewModel: ObservableObject {
         record.actualTakenDate = Date()
         try? context.save()
 
-        // Cancel the specific notification if it hasn't fired
+        // Cancel all reminders for this specific medication+time slot
         if let medication = record.medication {
-            let identifier = "medication-\(medication.id.uuidString)-\(record.scheduledTime)"
-            UNUserNotificationCenter.current()
-                .removePendingNotificationRequests(withIdentifiers: [identifier])
+            NotificationManager.shared.cancelAllRemindersForTime(
+                medicationID: medication.id,
+                time: record.scheduledTime
+            )
         }
 
         fetchTodayRecords(context: context)
@@ -83,6 +84,14 @@ final class TodayViewModel: ObservableObject {
 
         record.status = .skipped
         try? context.save()
+
+        // Cancel all reminders for this medication+time slot
+        if let medication = record.medication {
+            NotificationManager.shared.cancelAllRemindersForTime(
+                medicationID: medication.id,
+                time: record.scheduledTime
+            )
+        }
 
         fetchTodayRecords(context: context)
         updateProgress()

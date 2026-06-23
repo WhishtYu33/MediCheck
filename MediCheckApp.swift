@@ -63,9 +63,11 @@ struct MediCheckApp: App {
                     guard let medicationID = notification.userInfo?["medicationID"] as? UUID else {
                         return
                     }
+                    let scheduledTime = notification.userInfo?["scheduledTime"] as? String
                     notificationManager.handleMarkAsTaken(
                         medicationID: medicationID,
-                        context: container.mainContext
+                        context: container.mainContext,
+                        scheduledTime: scheduledTime
                     )
                 }
         }
